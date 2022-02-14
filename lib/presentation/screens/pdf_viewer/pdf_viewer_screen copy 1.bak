@@ -1,0 +1,367 @@
+import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:fill_and_sign/core/helper/consts.dart';
+import 'package:fill_and_sign/presentation/components/dialog.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
+
+import 'package:fill_and_sign/core/utils/utils.dart';
+import 'package:fill_and_sign/core/viewmodels/cubit/pdf_viewer/pdf_viewer_cubit.dart';
+import 'package:fill_and_sign/core/viewmodels/cubit/signature/signature_cubit.dart';
+import 'package:fill_and_sign/presentation/components/resizeble.dart';
+import 'package:fill_and_sign/presentation/screens/signature/signature_screen.dart';
+import 'package:pdf_render/pdf_render_widgets.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../app_theme.dart';
+
+class PdfViewerScreen extends StatelessWidget {
+  final File? pdfFile;
+
+  const PdfViewerScreen({
+    Key? key,
+    this.pdfFile,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    double fromLeft = 0;
+    double fromTop = 0;
+    double fromWidth = 0;
+    double fromHeight = 0;
+    Size? documentSize;
+
+    final PdfViewerController _pdfVieweCtrl = PdfViewerController();
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('PDF Viewer'),
+        actions: [
+          // Action to asign signature
+          IconButton(
+            icon: const Icon(MdiIcons.fountainPenTip),
+            onPressed: () async {
+              SharedPreferences prefs = await SharedPreferences.getInstance();
+
+              // Show dialog signature
+              await dialogSignature(context, prefs);
+            },
+          ),
+
+          // Action to unselect signature or implement signature
+          BlocBuilder<SignatureCubit, SignatureState>(
+            buildWhen: (previous, current) =>
+                previous.unSelect != current.unSelect,
+            builder: (context, state) {
+              if (state.signature != null) {
+                return IconButton(
+                  onPressed: () => context.read<SignatureCubit>().getSignature(
+                      signature: state.signature, unSelect: false),
+                  icon: const Icon(MdiIcons.check),
+                );
+              } else {
+                return const SizedBox();
+              }
+            },
+          ),
+
+          // Action to save signed pdf file
+          BlocBuilder<SignatureCubit, SignatureState>(
+            buildWhen: (previous, current) =>
+                previous.signature != current.signature,
+            builder: (ctx, state) {
+              if (state.signature != null) {
+                return BlocBuilder<PdfViewerCubit, PdfViewerState>(
+                  buildWhen: (previous, current) =>
+                      previous.currentPage != current.currentPage,
+                  builder: (context, stateCurrentPage) {
+                    return IconButton(
+                      onPressed: () async {
+                        final pathDocument = await Utils.addSigantureToPdf(
+                          signature: state.signature!,
+                          pdfFile: pdfFile!,
+                          fromLeft: fromLeft,
+                          fromTop: fromTop,
+                          fromWidth: fromWidth,
+                          fromHeight: fromHeight,
+                          currentPage: stateCurrentPage.currentPage! - 1,
+                        );
+
+                        // Display pdf storage location information
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text("Data saved successfully"),
+                                Text('Location : $pathDocument'),
+                              ],
+                            ),
+                            backgroundColor: Colors.greenAccent,
+                          ),
+                        );
+                      },
+                      icon: const Icon(MdiIcons.downloadCircleOutline),
+                    );
+                  },
+                );
+              } else {
+                return const SizedBox();
+              }
+            },
+          )
+        ],
+      ),
+      body: BlocBuilder<SignatureCubit, SignatureState>(
+        buildWhen: (previous, current) =>
+            previous.signature != current.signature ||
+            previous.unSelect != current.unSelect,
+        builder: (context, stateSignature) {
+          return BlocConsumer<PdfViewerCubit, PdfViewerState>(
+            listenWhen: (previous, current) =>
+                (previous.pdfDocument != current.pdfDocument ||
+                    previous.currentPage != current.currentPage ||
+                    previous.rect != current.rect) &&
+                stateSignature.signature != null,
+            listener: (context, state) {
+              if (state.pdfDocument != null) {
+                // Checks if listener evaluates to false
+                // ignore: invalid_use_of_protected_member
+                if (_pdfVieweCtrl.hasListeners == false) {
+                  _pdfVieweCtrl.removeListener(() {
+                    _pdfVieweCtrl.currentPageNumber;
+                  });
+                  _pdfVieweCtrl.dispose();
+                }
+              } else {
+                _pdfVieweCtrl.dispose();
+                throw 'DOCUMENT IS NOT READY';
+              }
+            },
+            buildWhen: (previous, current) => stateSignature.signature != null,
+            builder: (context, state) {
+              // Insert page rect document
+              final pageRect =
+                  _pdfVieweCtrl.ready?.getPageRect(state.currentPage!);
+
+              // Enter rect page value
+              context.read<PdfViewerCubit>().loadFilePdf(rect: pageRect);
+
+              if (state.pdfDocument != null) {
+                return PdfViewer.openFile(
+                  state.pdfDocument!.path,
+                  viewerController: _pdfVieweCtrl,
+                  params: PdfViewerParams(
+                    maxScale: 1.0,
+                    onViewerControllerInitialized: (p0) async {
+                      p0!.addListener(() {
+                        // Listen for page document changes
+                        final currentPagePdf = p0.ready?.currentPageNumber;
+
+                        // Option to find the greatest value on maps
+                        // final nameWithHighestValue = p0.visiblePages.entries
+                        //     .reduce((a, b) => a.value >= b.value ? a : b)
+                        //     .key;
+
+                        // Enter current page value
+                        context
+                            .read<PdfViewerCubit>()
+                            .loadFilePdf(currentPage: currentPagePdf);
+                      });
+
+                      // Get document page size
+                      documentSize = await Utils.getSizeDocument(
+                        pdfFile: pdfFile!,
+                        currentPage: state.currentPage! - 1,
+                      );
+                    },
+                    buildPageOverlay: (context, pageNumber, pageRect) {
+                      if (pageNumber == state.currentPage) {
+                        // Load signature
+                        if (stateSignature.signature != null) {
+                          return Resizeble(
+                            unSelect: stateSignature.unSelect!,
+                            onPressDelete: () =>
+                                context.read<SignatureCubit>().getSignature(
+                                      signature: null,
+                                      unSelect: false,
+                                    ),
+                            onSelected: () =>
+                                context.read<SignatureCubit>().getSignature(
+                                      signature: stateSignature.signature,
+                                      unSelect: true,
+                                    ),
+                            documentWidthSize: documentSize!.width,
+                            documentHeightSize: documentSize!.height,
+                            pdfWidthView: (state.rect != null)
+                                ? state.rect!.size.width
+                                : 0,
+                            pdfHeightView: (state.rect != null)
+                                ? state.rect!.size.height
+                                : 0,
+                            onFromLTWH: (left, top, width, height) {
+                              fromLeft = left;
+                              fromTop = top;
+                              fromWidth = width;
+                              fromHeight = height;
+                            },
+                            child: Image.memory(
+                              stateSignature.signature!,
+                              fit: BoxFit.fill,
+                            ),
+                          );
+                        }
+                      }
+                      return const SizedBox();
+                    },
+                    // Displays an indicator when the file has not loaded
+                    buildPagePlaceholder: (context, pageNumber, pageRect) =>
+                        const Center(child: CircularProgressIndicator()),
+                  ),
+                );
+              } else {
+                return const Center(
+                  child: CircularProgressIndicator(),
+                );
+              }
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  /// This method displays a dialog to create or use the created signature
+  ///
+  /// [prefs] to get shared preferences object for signature
+  Future<void> dialogSignature(
+    BuildContext context,
+    SharedPreferences prefs,
+  ) async {
+    showCustomDialog(
+      context: context,
+      child: BlocProvider<SignatureCubit>.value(
+        value: BlocProvider.of<SignatureCubit>(context),
+        child: BlocBuilder<SignatureCubit, SignatureState>(
+          buildWhen: (previous, current) => current.isDelete == true,
+          builder: (context, state) {
+            return Column(
+              children: [
+                (prefs.containsKey(keySignature))
+                    ? Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(12.0),
+                            topRight: Radius.circular(12.0),
+                          ),
+                          onTap: () {
+                            context.read<SignatureCubit>().getSignature(
+                                  signature: base64Decode(
+                                      prefs.getString(keySignature)!),
+                                  unSelect: true,
+                                );
+                            Navigator.pop(context);
+                          },
+                          child: Container(
+                            height: 100,
+                            decoration:
+                                const BoxDecoration(shape: BoxShape.rectangle),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Center(
+                                    child: Image.memory(
+                                      base64Decode(
+                                          prefs.getString(keySignature)!),
+                                      width: 80,
+                                      height: 80,
+                                    ),
+                                  ),
+                                ),
+                                IconButton(
+                                  onPressed: () {
+                                    prefs.remove(keySignature);
+                                    context.read<SignatureCubit>().getSignature(
+                                        signature: state.signature,
+                                        unSelect: state.unSelect,
+                                        isDelete: true);
+                                  },
+                                  icon: const Icon(
+                                    MdiIcons.closeCircleOutline,
+                                    color: Colors.red,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      )
+                    : const SizedBox(
+                        height: 50,
+                        child: Center(
+                          child: Text(
+                            'No Data Found',
+                            style: TextStyle(color: Colors.grey),
+                          ),
+                        ),
+                      ),
+                Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    border: Border(
+                      top: BorderSide(
+                        color: Theme.of(context).dividerColor,
+                      ),
+                    ),
+                  ),
+                  child: InkWell(
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(12.0),
+                      bottomRight: Radius.circular(12.0),
+                    ),
+                    onTap: (!prefs.containsKey(keySignature))
+                        ? () async {
+                            final Uint8List? resultImgSignature =
+                                await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const SignatureScreen(),
+                              ),
+                            );
+                            context.read<SignatureCubit>().getSignature(
+                                signature: resultImgSignature,
+                                unSelect: true,
+                                isDelete: false);
+
+                            Navigator.pop(context);
+                          }
+                        : null,
+                    child: Padding(
+                      padding: const EdgeInsets.all(14.0),
+                      child: Text(
+                        'Create Signature',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: (!prefs.containsKey(keySignature))
+                              ? AppTheme.secoundColor
+                              : Colors.grey,
+                          fontSize: 16.0,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}

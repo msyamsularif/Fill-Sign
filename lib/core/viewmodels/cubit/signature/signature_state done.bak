@@ -1,0 +1,32 @@
+part of 'signature_cubit.dart';
+
+class SignatureState extends Equatable {
+  final Uint8List? signature;
+  final bool? onSelected;
+  final bool? isDelete;
+  final String? error;
+
+  const SignatureState({
+    this.signature,
+    this.onSelected,
+    this.isDelete = false,
+    this.error,
+  });
+
+  @override
+  List<Object?> get props => [signature, onSelected, isDelete, error];
+
+  SignatureState copyWith({
+    Uint8List? signature,
+    bool? onSelected,
+    bool? isDelete,
+    String? error,
+  }) {
+    return SignatureState(
+      signature: signature ?? this.signature,
+      onSelected: onSelected ?? this.onSelected,
+      isDelete: isDelete ?? this.isDelete,
+      error: error ?? this.error,
+    );
+  }
+}

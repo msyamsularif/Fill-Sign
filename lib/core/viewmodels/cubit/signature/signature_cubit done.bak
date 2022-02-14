@@ -1,0 +1,35 @@
+import 'dart:typed_data';
+
+import 'package:bloc/bloc.dart';
+import 'package:equatable/equatable.dart';
+
+part 'signature_state.dart';
+
+class SignatureCubit extends Cubit<SignatureState> {
+  SignatureCubit() : super(const SignatureState(isDelete: false));
+
+  void getSignature({Uint8List? signature, bool? onSelected, bool? isDelete}) {
+    try {
+      emit(
+        state.copyWith(
+          signature: signature,
+          onSelected: onSelected,
+          isDelete: isDelete,
+        ),
+      );
+    } catch (e) {
+      emit(SignatureState(error: e.toString()));
+    }
+  }
+
+  void deleteSignature() {
+    try {
+      emit(const SignatureState(
+        signature: null,
+        onSelected: false,
+      ));
+    } catch (e) {
+      emit(SignatureState(error: e.toString()));
+    }
+  }
+}
