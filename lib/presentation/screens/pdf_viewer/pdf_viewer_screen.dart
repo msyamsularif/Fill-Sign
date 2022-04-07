@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:fill_and_sign/core/helper/encrypt_and_decrypt.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
@@ -31,7 +30,6 @@ class PdfViewerScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final EncryptAndDecryptPdf encryptAndDecryptPdf = EncryptAndDecryptPdf();
     final PdfViewerController _pdfVieweCtrl = PdfViewerController();
     int currentPage = 1;
     Size documentSize = const Size(0, 0);
@@ -86,8 +84,6 @@ class PdfViewerScreen extends StatelessWidget {
                           listSignature: state.listSignature!,
                           pdfFile: pdfFile!,
                         );
-
-                        
 
                         context
                             .read<SignatureCubit>()

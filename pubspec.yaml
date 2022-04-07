@@ -29,7 +29,6 @@ environment:
 dependencies:
   cupertino_icons: ^1.0.2
   dotted_border: ^2.0.0+2
-  encrypt: ^5.0.1
   equatable: ^2.0.3
   file_picker: ^4.2.7
   flutter:
