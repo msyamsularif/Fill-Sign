@@ -43,6 +43,9 @@ class _SignatureScreenState extends State<SignatureScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isPortrait =
+        MediaQuery.of(context).orientation == Orientation.portrait;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Create Signature'),
@@ -63,8 +66,7 @@ class _SignatureScreenState extends State<SignatureScreen> {
                   alignment: Alignment.center,
                   children: [
                     Signature(
-                      height: (MediaQuery.of(context).orientation ==
-                              Orientation.landscape)
+                      height: !isPortrait
                           ? MediaQuery.of(context).size.height * 0.4
                           : 250,
                       width: MediaQuery.of(context).size.width - 32,
@@ -81,7 +83,7 @@ class _SignatureScreenState extends State<SignatureScreen> {
                           ),
                           const SizedBox(height: 15),
                           const Text(
-                            "Silahkan gambar tanda tangan digital di sini",
+                            "Please draw a digital signature here",
                             style: TextStyle(
                               color: Colors.grey,
                             ),
@@ -94,19 +96,88 @@ class _SignatureScreenState extends State<SignatureScreen> {
                 ),
               ),
             ),
+            const SizedBox(
+              height: 30,
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                mainAxisAlignment: isPortrait
+                    ? MainAxisAlignment.spaceBetween
+                    : MainAxisAlignment.end,
+                children: [
+                  ButtonAction(
+                    title: 'Rotate',
+                    icon: isPortrait
+                        ? Icons.screen_lock_portrait
+                        : Icons.screen_lock_landscape,
+                    onPressed: () {
+                      final newOrientation = isPortrait
+                          ? Orientation.landscape
+                          : Orientation.portrait;
+
+                      signatureController.clear();
+                      Utils.setOrientation(orientation: newOrientation);
+                    },
+                  ),
+                  if (!isPortrait) ...[
+                    const SizedBox(width: 10),
+                  ],
+                  ButtonAction(
+                    title: 'Clear',
+                    icon: MdiIcons.broom,
+                    onPressed: () => signatureController.clear(),
+                  ),
+                  if (!isPortrait) ...[
+                    const SizedBox(width: 10),
+                  ],
+                  ButtonAction(
+                    title: 'Done',
+                    icon: MdiIcons.checkboxMarkedCircleOutline,
+                    onPressed: () async {
+                      final isLanscape = MediaQuery.of(context).orientation ==
+                          Orientation.landscape;
+
+                      if (signatureController.isNotEmpty) {
+                        final signature = await Utils.exportSignature(
+                          signatureController: signatureController,
+                          penColor: Colors.grey[900]!,
+                        );
+
+                        if (isLanscape) {
+                          // Set orientation to potrait Up
+                          SystemChrome.setPreferredOrientations(
+                            [DeviceOrientation.portraitUp],
+                          );
+                        }
+
+                        await Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                SignatureDetailScreen(signature: signature),
+                          ),
+                        );
+
+                        signatureController.clear();
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
-      bottomNavigationBar: SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            buildButtons(context),
-            buildSwapOrientation(),
-          ],
-        ),
-      ),
+      // bottomNavigationBar: SafeArea(
+      //   child: Column(
+      //     mainAxisSize: MainAxisSize.min,
+      //     mainAxisAlignment: MainAxisAlignment.end,
+      //     children: [
+      //       buildButtons(context),
+      //       buildSwapOrientation(),
+      //     ],
+      //   ),
+      // ),
     );
   }
 
@@ -195,6 +266,42 @@ class _SignatureScreenState extends State<SignatureScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class ButtonAction extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  const ButtonAction({
+    Key? key,
+    required this.title,
+    required this.icon,
+    required this.onPressed,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return ElevatedButton(
+      onPressed: onPressed,
+      style: ElevatedButton.styleFrom(
+        primary: AppTheme.secoundColor,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(icon),
+          const SizedBox(width: 5),
+          Text(
+            title,
+            style: const TextStyle(fontSize: 16),
+          ),
+        ],
       ),
     );
   }

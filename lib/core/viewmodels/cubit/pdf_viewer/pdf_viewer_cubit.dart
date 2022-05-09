@@ -15,6 +15,7 @@ class PdfViewerCubit extends Cubit<PdfViewerState> {
           rect: null,
           currentPage: 1,
           pageSize: Size(0, 0),
+          totalPage: 1,
         ));
 
   void loadFilePdf({File? fileDocument, Rect? rect, int? currentPage}) {
@@ -45,6 +46,12 @@ class PdfViewerCubit extends Cubit<PdfViewerState> {
           pageSize: documentSize,
         ),
       );
+    }
+  }
+
+  void getTotalPage(int? totalPage) {
+    if (state.pdfDocument != null) {
+      emit(state.copyWith(totalPage: totalPage));
     }
   }
 }

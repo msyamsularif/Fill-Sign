@@ -31,9 +31,14 @@ class PdfViewerScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final PdfViewerController _pdfVieweCtrl = PdfViewerController();
+
     int currentPage = 1;
     Size documentSize = const Size(0, 0);
     Size documentViewSize = const Size(0, 0);
+
+    // Select total page
+    int totalPage =
+        context.select((PdfViewerCubit element) => element.state.totalPage!);
 
     // Listen state PdfViewerCubit
     BlocProvider.of<PdfViewerCubit>(context).stream.listen((event) {
@@ -99,15 +104,29 @@ class PdfViewerScreen extends StatelessWidget {
                           await showInfoDialog(
                             context: context,
                             onOKButtonPressed: () => Navigator.pop(context),
-                            child: const Center(
+                            child: Center(
                               child: Padding(
-                                padding: EdgeInsets.only(top: 10, bottom: 20),
-                                child: Text(
-                                  "Failed to save",
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    color: Colors.red,
-                                  ),
+                                padding: const EdgeInsets.only(
+                                  top: 10,
+                                  bottom: 20,
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: const [
+                                    Icon(
+                                      MdiIcons.fileAlert,
+                                      color: Colors.red,
+                                      size: 32,
+                                    ),
+                                    SizedBox(width: 5),
+                                    Text(
+                                      "Failed to save",
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        color: Colors.red,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
@@ -129,20 +148,21 @@ class PdfViewerScreen extends StatelessWidget {
       ),
       body: GestureDetector(
         // Action to unselect signature or implement signature
-        onTap: () => context
-            .read<SignatureCubit>()
-            .onSelectedSignature(onSelected: false),
+        onTap: () {
+          context.read<SignatureCubit>().onSelectedSignature(onSelected: false);
+        },
         child: PdfViewer.openFile(
           pdfFile!.path,
           viewerController: _pdfVieweCtrl,
           params: PdfViewerParams(
             scaleEnabled: false,
-            layoutPages: (contentViewSize, pageSizes) =>
-                // Change PDF page layout
-                Utils.changePdfPageLayout(
-              contentViewSize: contentViewSize,
-              pageSizes: pageSizes,
-            ),
+            layoutPages: (contentViewSize, pageSizes) {
+              // Change PDF page layout
+              return Utils.changePdfPageLayout(
+                contentViewSize: contentViewSize,
+                pageSizes: pageSizes,
+              );
+            },
             onInteractionEnd: (details) {
               // Get page size document when interaction end
               context.read<PdfViewerCubit>().getPageSizeDocument();
@@ -153,6 +173,7 @@ class PdfViewerScreen extends StatelessWidget {
               p0!.addListener(() {
                 // Listen for page document changes
                 final currentPagePdf = p0.ready?.currentPageNumber;
+
                 currentPage = currentPagePdf!;
 
                 pageRect = _pdfVieweCtrl.ready?.getPageRect(currentPagePdf);
@@ -162,17 +183,20 @@ class PdfViewerScreen extends StatelessWidget {
                 //     .reduce((a, b) => a.value >= b.value ? a : b)
                 //     .key;
 
-                // Enter current page value and rect page value
+                // Listen current page value and rect page value
                 context
                     .read<PdfViewerCubit>()
                     .loadFilePdf(currentPage: currentPagePdf, rect: pageRect);
               });
 
-              // Enter rect page value when initialized
+              // Enter rect page value when viewer controller initialized
               context.read<PdfViewerCubit>().loadFilePdf(rect: pageRect);
 
-              // Get page size document when initialized
+              // Get page size document when viewer controller initialized
               context.read<PdfViewerCubit>().getPageSizeDocument();
+
+              // Enter total page when viewer controller initialized
+              context.read<PdfViewerCubit>().getTotalPage(p0.ready?.pageCount);
             },
             buildPageOverlay: (context, pageNumber, pageRect) =>
                 BlocBuilder<SignatureCubit, SignatureState>(
@@ -230,8 +254,8 @@ class PdfViewerScreen extends StatelessWidget {
                                 unSelect: e.onSelected!,
                                 width: e.fixedWidth,
                                 height: e.fixedHeight,
-                                top: (!e.onSelected!) ? e.fixedTop : null,
-                                left: (!e.onSelected!) ? e.fixedLeft : null,
+                                top: e.fixedTop,
+                                left: e.fixedLeft,
                                 onPressDelete: () {
                                   context
                                       .read<SignatureCubit>()
@@ -253,11 +277,6 @@ class PdfViewerScreen extends StatelessWidget {
                                         signatureModel: e,
                                       );
                                 },
-                                // documentWidthSize: state.pageSize!.width,
-                                // documentHeightSize: state.pageSize!.height,
-                                // documentWidthView: state.rect?.size.width ?? 0,
-                                // documentHeightView:
-                                //     state.rect?.size.height ?? 0,
                                 documentWidthSize: e.documentSize?.width,
                                 documentHeightSize: e.documentSize?.height,
                                 documentWidthView: e.documentViewSize?.width,
@@ -309,12 +328,14 @@ class PdfViewerScreen extends StatelessWidget {
         ),
       ),
       floatingActionButton: SafeArea(
-        child: FloatingActionButton(
-          onPressed: () => _pdfVieweCtrl.ready?.goToPage(
-            pageNumber: _pdfVieweCtrl.pageCount,
-          ),
-          child: const Icon(MdiIcons.pageLast, color: Colors.white),
-        ),
+        child: (totalPage != 1)
+            ? FloatingActionButton(
+                onPressed: () => _pdfVieweCtrl.ready?.goToPage(
+                  pageNumber: _pdfVieweCtrl.pageCount,
+                ),
+                child: const Icon(MdiIcons.pageLast, color: Colors.white),
+              )
+            : const SizedBox(),
       ),
     );
   }
@@ -537,12 +558,15 @@ class PdfViewerScreen extends StatelessWidget {
                                 builder: (_) => const SignatureScreen(),
                               ),
                             );
-                            context.read<SignatureCubit>().getSignature(
-                                  signature: resultImgSignature!,
-                                  currentPage: currentPage,
-                                  documentSize: documentSize,
-                                  documentViewSize: documentViewSize,
-                                );
+
+                            if (resultImgSignature != null) {
+                              context.read<SignatureCubit>().getSignature(
+                                    signature: resultImgSignature,
+                                    currentPage: currentPage,
+                                    documentSize: documentSize,
+                                    documentViewSize: documentViewSize,
+                                  );
+                            }
 
                             Navigator.pop(context);
                           }

@@ -37,19 +37,33 @@ class Utils {
   static Future<bool> storeSignature({
     required Uint8List signature,
   }) async {
-    final status = await Permission.storage.status;
-    if (!status.isGranted) {
-      await Permission.storage.request();
-    }
+    bool statusSaved = false;
 
+    // Define file name
     final time = DateTime.now().microsecondsSinceEpoch;
     final name = 'signature_$time.png';
 
-    final result =
-        await ImageGallerySaver.saveImage(signature, name: name, quality: 100);
-    final isSuccess = result['isSuccess'];
+    // Save new file PDF to directory
+    final File? pathFile = await saveDocumentToExternalStorage(
+      fileName: name,
+      filePath: '/Mitra Fill and Sign/Signature',
+      fileData: signature,
+      useTemporaryDirectory: true,
+    );
 
-    return isSuccess;
+    if (pathFile != null) {
+      // Save new signature to gallery
+      final message = await ImageGallerySaver.saveFile(
+        pathFile.path,
+        name: name,
+        isReturnPathOfIOS: true,
+      );
+
+      statusSaved = message['isSuccess'];
+      return statusSaved;
+    }
+
+    return statusSaved;
   }
 
   /// This function is used to convert the signature into an image
@@ -93,24 +107,57 @@ class Utils {
   /// [allowCompression] to determine the file needs to be compressed or not
   /// [allowMultiple] to specify a file can be selected one or more than one
   static Future<File?> filePicker({
+    required BuildContext context,
     FileType type = FileType.any,
     List<String>? allowedExtensions,
     bool allowCompression = true,
     bool allowMultiple = false,
   }) async {
-    try {
+    final statusStorage = await Permission.storage.request();
+
+    if (statusStorage.isGranted) {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: type,
         allowedExtensions: allowedExtensions,
         allowCompression: allowCompression,
         allowMultiple: allowMultiple,
       );
-
-      final File? file = File(result!.files.single.path!);
-
-      return file;
-    } catch (e) {
-      throw e.toString();
+      if (result != null) {
+        final File? file = File(result.files.single.path!);
+        return file;
+      }
+    } else if (statusStorage.isDenied) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: SizedBox(
+            height: 40,
+            child: Center(
+              child: Row(
+                children: const [
+                  Icon(
+                    Icons.warning_amber_rounded,
+                    size: 32,
+                    color: Colors.white,
+                  ),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'This app needs storage access to take file for upload file PDF',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    } else {
+      await openAppSettings();
     }
   }
 
@@ -121,13 +168,7 @@ class Utils {
   static Future<String?> addSigantureToPdf({
     required List<SignatureModel> listSignature,
     required File pdfFile,
-    // required int currentPage,
   }) async {
-    Directory? directory;
-    final statusStorage = await Permission.storage.request();
-    final statusManageStorage =
-        await Permission.manageExternalStorage.request();
-
     final PdfDocument document = PdfDocument(
       inputBytes: await pdfFile.readAsBytes(),
     );
@@ -157,30 +198,19 @@ class Utils {
     final fileName = 'PdfEdit_$time.pdf';
 
     // Save new file PDF to directory
-    if (statusStorage.isGranted || statusManageStorage.isGranted) {
-      if (Platform.isAndroid) {
-        directory = await getExternalStorageDirectory();
+    final pathDocument = await saveDocumentToExternalStorage(
+      fileName: fileName,
+      filePath: '/Mitra Fill and Sign/Document',
+      fileData: document.save(),
+    );
 
-        final List<String>? listPath = directory!.path.split('/');
-        String newPath = '';
+    document.dispose();
 
-        for (var i = 1; i < listPath!.length; i++) {
-          if (listPath[i] != 'Android') {
-            newPath += '/' + listPath[i];
-          } else {
-            break;
-          }
-        }
-        directory = await Directory(newPath + '/Mitra Fill and Sign/Document')
-            .create(recursive: true);
-      } else if (Platform.isIOS) {
-        directory = await getApplicationDocumentsDirectory();
-      }
+    if (pathDocument != null) {
+      // alternative way to save file path
+      // '${directory.path}/$fileName';
 
-      await File('${directory!.path}/$fileName').writeAsBytes(document.save());
-      document.dispose();
-
-      return '${directory.path}/$fileName';
+      return pathDocument.path;
     }
   }
 
@@ -268,5 +298,56 @@ class Utils {
       );
     }
     return rectLayout;
+  }
+
+  /// This function is used to save document to external storage
+  ///
+  /// [fileName] to enter the name of the file
+  /// [filePath] to enter the path of the file
+  /// [fileData] to enter the data of the file
+  /// [useTemporaryDirectory] to enter the temporary directory
+  static Future<File?> saveDocumentToExternalStorage({
+    required String fileName,
+    required String filePath,
+    required List<int> fileData,
+    bool useTemporaryDirectory = false,
+  }) async {
+    Directory? directory = await getExternalStorageDirectory();
+    final statusStorage = await Permission.storage.request();
+    final statusManageStorage =
+        await Permission.manageExternalStorage.request();
+
+    if (statusStorage.isGranted || statusManageStorage.isGranted) {
+      if (Platform.isAndroid) {
+        if (useTemporaryDirectory) {
+          directory = await getTemporaryDirectory();
+          directory = await Directory(directory.path + '/' + filePath)
+              .create(recursive: true);
+        } else {
+          directory = await getExternalStorageDirectory();
+          final List<String>? listPath = directory!.path.split('/');
+          String newPath = '';
+
+          for (var i = 1; i < listPath!.length; i++) {
+            if (listPath[i] != 'Android') {
+              newPath += '/' + listPath[i];
+            } else {
+              break;
+            }
+          }
+
+          directory =
+              await Directory(newPath + filePath).create(recursive: true);
+        }
+      } else if (Platform.isIOS) {
+        directory = await getApplicationDocumentsDirectory();
+      }
+      return File('${directory!.path}/$fileName').writeAsBytes(fileData);
+    } else if (statusStorage.isDenied || statusManageStorage.isDenied) {
+      statusStorage;
+      statusManageStorage;
+    } else {
+      await openAppSettings();
+    }
   }
 }

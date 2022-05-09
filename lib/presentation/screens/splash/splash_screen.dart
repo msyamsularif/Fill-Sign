@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:fill_and_sign/core/viewmodels/cubit/recent_file/recent_file_cubit.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 
 import '../../app_theme.dart';
@@ -21,7 +23,10 @@ class _SplashScreenState extends State<SplashScreen> {
       () => Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(
-            builder: (_) => const HomeScreen(),
+            builder: (_) => BlocProvider<RecentFileCubit>(
+              create: (context) => RecentFileCubit()..loadDocumentPath(),
+              child: const HomeScreen(),
+            ),
           ),
           (route) => false),
     );
@@ -45,9 +50,11 @@ class _SplashScreenState extends State<SplashScreen> {
             Text(
               "Mitra Fill & Sign",
               style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 24,
-                  color: Colors.white),
+                fontSize: 30,
+                color: Colors.white,
+                fontFamily: 'Austein',
+                letterSpacing: 1,
+              ),
             )
           ],
         ),
