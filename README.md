@@ -27,3 +27,7 @@ This application has several features that have been added including:
 - Share feature that can make it easier to send files
 
 Wait for the next feature...
+
+## Flutter Version
+
+Flutter version: 2.8.0
