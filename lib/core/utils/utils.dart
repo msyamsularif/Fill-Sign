@@ -46,7 +46,7 @@ class Utils {
     // Save new file PDF to directory
     final File? pathFile = await saveDocumentToExternalStorage(
       fileName: name,
-      filePath: '/Mitra Fill and Sign/Signature',
+      filePath: '/eSigner/Signature',
       fileData: signature,
       useTemporaryDirectory: true,
     );
@@ -200,7 +200,7 @@ class Utils {
     // Save new file PDF to directory
     final pathDocument = await saveDocumentToExternalStorage(
       fileName: fileName,
-      filePath: '/Mitra Fill and Sign/Document',
+      filePath: '/eSigner/Document',
       fileData: document.save(),
     );
 
