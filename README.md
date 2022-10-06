@@ -28,6 +28,12 @@ This application has several features that have been added including:
 
 Wait for the next feature...
 
+## Preview
+
+
+https://user-images.githubusercontent.com/34200832/194261078-bc94ad50-cece-426c-8e89-a4a5b4a7c92f.mp4
+
+
 ## Flutter Version
 
 Flutter version: 2.8.0
